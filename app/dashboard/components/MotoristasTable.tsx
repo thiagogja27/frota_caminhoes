@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react'
 import { Table, Button, Modal, Form, Alert } from 'react-bootstrap'
 import { useSupabaseClient } from '@supabase/auth-helpers-react'
-import type { Database } from '@/app/lib/database.types'
+import type { Database } from '@/lib/database.types'
 
 type Motorista = Database['public']['Tables']['motoristas']['Row']
 

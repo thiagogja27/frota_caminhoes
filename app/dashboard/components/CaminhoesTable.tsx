@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { Button, Modal, Form, Table, Alert } from 'react-bootstrap'
-import { supabase } from '@/app/lib/supabase'
+import { supabase } from '@/lib/supabase'
 
 interface Caminhao {
   id?: number

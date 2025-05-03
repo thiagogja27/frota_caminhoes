@@ -28,6 +28,6 @@
     "**/*.tsx",
     ".next/types/**/*.ts",
     "app/dashboard/types/**/*.ts"  // Garante que os tipos sejam incluídos
-  ],
+, "next.config.mjs"  ],
   "exclude": ["node_modules"]
 }
