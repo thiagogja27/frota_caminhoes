@@ -7,7 +7,7 @@ export async function middleware(req: NextRequest) {
   const res = NextResponse.next()
   const supabase = createMiddlewareClient({ req, res })
 
-  // Verifica a sessão usando o Supabase Auth do cookie
+  // Verifica a sessão usando o Supabase Auth
   const { data: { session } } = await supabase.auth.getSession()
 
   // Redireciona para o login se não autenticado e tentar acessar '/dashboard'
