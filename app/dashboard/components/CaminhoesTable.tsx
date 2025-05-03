@@ -4,12 +4,14 @@ import { useEffect, useState } from 'react'
 import { Button, Modal, Form, Table, Alert } from 'react-bootstrap'
 import { supabase } from '@/lib/supabase'
 
+type StatusCaminhao = 'disponivel' | 'em_rota' | 'em_manutencao'
+
 interface Caminhao {
   id?: number
   placa: string
   modelo: string
   capacidade_kg: string
-  status: string
+  status: StatusCaminhao | ''
   created_at?: string
   updated_at?: string
 }
@@ -34,8 +36,8 @@ export default function CaminhoesManager() {
   }, [])
 
   const handleSubmit = async () => {
-    if (!formData.placa || !formData.modelo) {
-      setError('Placa e modelo são obrigatórios')
+    if (!formData.placa || !formData.modelo || !formData.status) {
+      setError('Placa, modelo e status são obrigatórios')
       return
     }
 
@@ -61,7 +63,7 @@ export default function CaminhoesManager() {
 
   return (
     <>
-      <Button onClick={() => setShowModal(true)} className="mb-3">
+      <Button onClick={() => { setFormData({ placa: '', modelo: '', capacidade_kg: '', status: '' }); setShowModal(true) }} className="mb-3">
         Adicionar Caminhão
       </Button>
 
@@ -86,8 +88,8 @@ export default function CaminhoesManager() {
               <td>{c.modelo}</td>
               <td>{c.capacidade_kg}</td>
               <td>{c.status}</td>
-              <td>{new Date(c.created_at!).toLocaleString()}</td>
-              <td>{new Date(c.updated_at!).toLocaleString()}</td>
+              <td>{c.created_at ? new Date(c.created_at).toLocaleString() : '-'}</td>
+              <td>{c.updated_at ? new Date(c.updated_at).toLocaleString() : '-'}</td>
               <td>
                 <Button
                   variant="warning"
@@ -105,48 +107,51 @@ export default function CaminhoesManager() {
         </tbody>
       </Table>
 
-      <Modal show={showModal} onHide={() => {
-        setShowModal(false)
-        setError(null)
-        setFormData({ placa: '', modelo: '', capacidade_kg: '', status: '' })
-      }}>
+      <Modal show={showModal} onHide={() => setShowModal(false)}>
         <Modal.Header closeButton>
           <Modal.Title>{formData.id ? 'Editar Caminhão' : 'Novo Caminhão'}</Modal.Title>
         </Modal.Header>
         <Modal.Body>
           <Form>
-            <Form.Group className="mb-3">
+            <Form.Group className="mb-3" controlId="formPlaca">
               <Form.Label>Placa</Form.Label>
               <Form.Control
+                type="text"
                 value={formData.placa}
                 onChange={(e) => setFormData({ ...formData, placa: e.target.value })}
               />
             </Form.Group>
 
-            <Form.Group className="mb-3">
+            <Form.Group className="mb-3" controlId="formModelo">
               <Form.Label>Modelo</Form.Label>
               <Form.Control
+                type="text"
                 value={formData.modelo}
                 onChange={(e) => setFormData({ ...formData, modelo: e.target.value })}
               />
             </Form.Group>
 
-            <Form.Group className="mb-3">
+            <Form.Group className="mb-3" controlId="formCapacidade">
               <Form.Label>Capacidade (kg)</Form.Label>
               <Form.Control
-                type="number"
+                type="text"
                 value={formData.capacidade_kg}
                 onChange={(e) => setFormData({ ...formData, capacidade_kg: e.target.value })}
               />
             </Form.Group>
 
-            <Form.Group className="mb-3">
+            <Form.Group className="mb-3" controlId="formStatus">
               <Form.Label>Status</Form.Label>
               <Form.Select
                 value={formData.status}
-                onChange={(e) => setFormData({ ...formData, status: e.target.value })}
+                onChange={(e) =>
+                  setFormData({
+                    ...formData,
+                    status: e.target.value as StatusCaminhao,
+                  })
+                }
               >
-                <option value="">Selecione</option>
+                <option value="">Selecione o status</option>
                 <option value="disponivel">Disponível</option>
                 <option value="em_rota">Em Rota</option>
                 <option value="em_manutencao">Em Manutenção</option>
@@ -155,8 +160,12 @@ export default function CaminhoesManager() {
           </Form>
         </Modal.Body>
         <Modal.Footer>
-          <Button variant="secondary" onClick={() => setShowModal(false)}>Cancelar</Button>
-          <Button variant="primary" onClick={handleSubmit}>Salvar</Button>
+          <Button variant="secondary" onClick={() => setShowModal(false)}>
+            Cancelar
+          </Button>
+          <Button variant="primary" onClick={handleSubmit}>
+            Salvar
+          </Button>
         </Modal.Footer>
       </Modal>
     </>

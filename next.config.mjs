@@ -1,13 +1,12 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // Configurações essenciais para Supabase e Vercel:
   images: {
-    domains: ['lh3.googleusercontent.com'], // Para autenticação social (opcional)
+    domains: ['lh3.googleusercontent.com'],
   },
-  // Melhora a compatibilidade com Supabase:
+  // Configuração CORRETA para Supabase:
+  serverExternalPackages: ['@supabase/supabase-js'], // Substitui serverComponentsExternalPackages
   experimental: {
-    serverActions: true, // Ative se usar Server Actions
-    serverComponentsExternalPackages: ['@supabase/supabase-js'], // Para Server Components
+    // Remova serverActions ou defina como objeto vazio se não for usar
   }
 };
 

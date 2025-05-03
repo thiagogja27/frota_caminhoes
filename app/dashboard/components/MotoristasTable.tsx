@@ -124,12 +124,20 @@ export default function MotoristasTable() {
             <Form.Group className="mb-3">
               <Form.Label>Status</Form.Label>
               <Form.Select
-                value={formData.status || ''}
-                onChange={(e) => setFormData({ ...formData, status: e.target.value })}
-              >
-                <option value="disponivel">Disponível</option>
-                <option value="em_viagem">Em Viagem</option>
-              </Form.Select>
+  value={formData.status || ''}
+  onChange={(e) =>
+    setFormData({
+      ...formData,
+      status: e.target.value as 'disponivel' | 'em_viagem' | 'afastado',
+    })
+  }
+>
+  <option value="">Selecione o status</option>
+  <option value="disponivel">Disponível</option>
+  <option value="em_viagem">Em Viagem</option>
+  <option value="afastado">Afastado</option>
+</Form.Select>
+
             </Form.Group>
           </Form>
         </Modal.Body>
