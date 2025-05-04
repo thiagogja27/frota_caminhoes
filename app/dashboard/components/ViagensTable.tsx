@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Table, Button, Spinner, Alert, Modal, Form, Row, Col } from 'react-bootstrap'
+import { Table, Button, Spinner, Alert, Modal, Form, Row, Col, ButtonGroup } from 'react-bootstrap'
 import { useSupabaseClient } from '@supabase/auth-helpers-react'
 
 interface Viagem {
@@ -44,6 +44,9 @@ export default function ViagensTable() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [showModal, setShowModal] = useState(false)
+  const [showDeleteModal, setShowDeleteModal] = useState(false)
+  const [viagemToDelete, setViagemToDelete] = useState<number | null>(null)
+  const [editingViagem, setEditingViagem] = useState<Viagem | null>(null)
   const [formData, setFormData] = useState<Partial<Viagem>>({
     status: 'programada'
   })
@@ -52,7 +55,6 @@ export default function ViagensTable() {
   const [rotas, setRotas] = useState<Rota[]>([])
   const [formLoading, setFormLoading] = useState(false)
 
-  // Busca viagens da API
   const fetchViagens = async () => {
     try {
       setLoading(true)
@@ -71,22 +73,18 @@ export default function ViagensTable() {
     }
   }
 
-  // Busca dados para o formulário
   const fetchFormData = async () => {
     try {
-      // Busca caminhões disponíveis
       const { data: caminhoesData } = await supabase
         .from('caminhoes')
         .select('*')
         .or('status.eq.disponivel,status.eq.em_rota')
 
-      // Busca motoristas disponíveis
       const { data: motoristasData } = await supabase
         .from('motoristas')
         .select('*')
         .or('status.eq.disponivel,status.eq.em_viagem')
 
-      // Busca rotas
       const { data: rotasData } = await supabase
         .from('rotas')
         .select('*')
@@ -105,71 +103,118 @@ export default function ViagensTable() {
     fetchFormData()
   }, [])
 
+  const handleEdit = (viagem: Viagem) => {
+    setEditingViagem(viagem)
+    setFormData({
+      ...viagem,
+      data_saida: viagem.data_saida.split('+')[0], // Remove timezone para o input datetime-local
+      data_chegada_estimada: viagem.data_chegada_estimada.split('+')[0],
+      data_chegada_real: viagem.data_chegada_real ? viagem.data_chegada_real.split('+')[0] : null
+    })
+    setShowModal(true)
+  }
+
   const handleSubmit = async () => {
     try {
       setError('')
       setFormLoading(true)
       
-      // Validação dos campos obrigatórios
       if (!formData.caminhao_id || !formData.motorista_id || !formData.rota_id || 
           !formData.data_saida || !formData.data_chegada_estimada) {
         throw new Error('Preencha todos os campos obrigatórios')
       }
 
-      // Verifica se o caminhão está disponível
-      const caminhaoSelecionado = caminhoes.find(c => c.id === formData.caminhao_id)
-      if (caminhaoSelecionado?.status !== 'disponivel') {
-        throw new Error('O caminhão selecionado não está disponível')
+      if (editingViagem) {
+        // Atualizar viagem existente
+        const { data, error } = await supabase
+          .from('viagens')
+          .update({
+            caminhao_id: formData.caminhao_id,
+            motorista_id: formData.motorista_id,
+            rota_id: formData.rota_id,
+            data_saida: formData.data_saida,
+            data_chegada_estimada: formData.data_chegada_estimada,
+            data_chegada_real: formData.data_chegada_real,
+            status: formData.status,
+            carga_descricao: formData.carga_descricao,
+            peso_carga: formData.peso_carga
+          })
+          .eq('id', editingViagem.id)
+          .select()
+
+        if (error) throw error
+
+        setViagens(viagens.map(v => v.id === editingViagem.id ? data[0] : v))
+      } else {
+        // Criar nova viagem
+        const { data, error } = await supabase
+          .from('viagens')
+          .insert([{
+            caminhao_id: formData.caminhao_id,
+            motorista_id: formData.motorista_id,
+            rota_id: formData.rota_id,
+            data_saida: formData.data_saida,
+            data_chegada_estimada: formData.data_chegada_estimada,
+            status: formData.status,
+            carga_descricao: formData.carga_descricao,
+            peso_carga: formData.peso_carga
+          }])
+          .select()
+
+        if (error) throw error
+
+        setViagens([data[0], ...viagens])
       }
 
-      // Verifica se o motorista está disponível
-      const motoristaSelecionado = motoristas.find(m => m.id === formData.motorista_id)
-      if (motoristaSelecionado?.status !== 'disponivel') {
-        throw new Error('O motorista selecionado não está disponível')
-      }
-
-      // Insere a nova viagem
-      const { data, error } = await supabase
-        .from('viagens')
-        .insert([{
-          caminhao_id: formData.caminhao_id,
-          motorista_id: formData.motorista_id,
-          rota_id: formData.rota_id,
-          data_saida: formData.data_saida,
-          data_chegada_estimada: formData.data_chegada_estimada,
-          status: formData.status,
-          carga_descricao: formData.carga_descricao,
-          peso_carga: formData.peso_carga
-        }])
-        .select()
-
-      if (error) throw error
-
-      // Atualiza status do caminhão e motorista
-      await supabase
-        .from('caminhoes')
-        .update({ status: 'em_rota' })
-        .eq('id', formData.caminhao_id)
-
-      await supabase
-        .from('motoristas')
-        .update({ status: 'em_viagem' })
-        .eq('id', formData.motorista_id)
-
-      // Atualiza a lista de viagens
-      setViagens([data[0], ...viagens])
       setShowModal(false)
       setFormData({ status: 'programada' })
+      setEditingViagem(null)
       
-      // Recarrega os dados
       await fetchViagens()
       await fetchFormData()
 
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Erro ao criar viagem')
+      setError(err instanceof Error ? err.message : 'Erro ao salvar viagem')
     } finally {
       setFormLoading(false)
     }
+  }
+
+  const handleDelete = async () => {
+    try {
+      if (!viagemToDelete) return
+      
+      setFormLoading(true)
+      
+      const { error } = await supabase
+        .from('viagens')
+        .delete()
+        .eq('id', viagemToDelete)
+
+      if (error) throw error
+
+      setViagens(viagens.filter(v => v.id !== viagemToDelete))
+      setShowDeleteModal(false)
+      setViagemToDelete(null)
+      
+      await fetchFormData()
+
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erro ao excluir viagem')
+    } finally {
+      setFormLoading(false)
+    }
+  }
+
+  const formatDateTime = (dateString: string) => {
+    const date = new Date(dateString)
+    return date.toLocaleString('pt-BR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    })
   }
 
   if (loading) return <Spinner animation="border" />
@@ -193,6 +238,7 @@ export default function ViagensTable() {
             <th>Status</th>
             <th>Carga</th>
             <th>Peso (kg)</th>
+            <th>Ações</th>
           </tr>
         </thead>
         <tbody>
@@ -201,21 +247,46 @@ export default function ViagensTable() {
               <td>{viagem.caminhoes?.placa || viagem.caminhao_id}</td>
               <td>{viagem.motoristas?.nome || viagem.motorista_id}</td>
               <td>{viagem.rotas?.descricao || viagem.rota_id}</td>
-              <td>{new Date(viagem.data_saida).toLocaleString()}</td>
-              <td>{new Date(viagem.data_chegada_estimada).toLocaleString()}</td>
-              <td>{viagem.data_chegada_real ? new Date(viagem.data_chegada_real).toLocaleString() : '—'}</td>
+              <td>{formatDateTime(viagem.data_saida)}</td>
+              <td>{formatDateTime(viagem.data_chegada_estimada)}</td>
+              <td>{viagem.data_chegada_real ? formatDateTime(viagem.data_chegada_real) : '—'}</td>
               <td>{viagem.status}</td>
               <td>{viagem.carga_descricao || '—'}</td>
               <td>{viagem.peso_carga ?? '—'}</td>
+              <td>
+                <ButtonGroup size="sm">
+                  <Button 
+                    variant="warning" 
+                    onClick={() => handleEdit(viagem)}
+                    title="Editar"
+                  >
+                    <i className="bi bi-pencil"></i>
+                  </Button>
+                  <Button 
+                    variant="danger" 
+                    onClick={() => {
+                      setViagemToDelete(viagem.id)
+                      setShowDeleteModal(true)
+                    }}
+                    title="Excluir"
+                  >
+                    <i className="bi bi-trash"></i>
+                  </Button>
+                </ButtonGroup>
+              </td>
             </tr>
           ))}
         </tbody>
       </Table>
 
-      {/* Modal de criação de viagem */}
-      <Modal show={showModal} onHide={() => setShowModal(false)} size="lg">
+      {/* Modal de criação/edição de viagem */}
+      <Modal show={showModal} onHide={() => {
+        setShowModal(false)
+        setEditingViagem(null)
+        setFormData({ status: 'programada' })
+      }} size="lg">
         <Modal.Header closeButton>
-          <Modal.Title>Nova Viagem</Modal.Title>
+          <Modal.Title>{editingViagem ? 'Editar Viagem' : 'Nova Viagem'}</Modal.Title>
         </Modal.Header>
         <Modal.Body>
           {error && <Alert variant="danger">{error}</Alert>}
@@ -320,6 +391,21 @@ export default function ViagensTable() {
               </Col>
             </Row>
 
+            {formData.status === 'concluida' && (
+              <Row>
+                <Col md={6}>
+                  <Form.Group className="mb-3">
+                    <Form.Label>Data Real de Chegada</Form.Label>
+                    <Form.Control
+                      type="datetime-local"
+                      value={formData.data_chegada_real || ''}
+                      onChange={(e) => setFormData({...formData, data_chegada_real: e.target.value})}
+                    />
+                  </Form.Group>
+                </Col>
+              </Row>
+            )}
+
             <Form.Group className="mb-3">
               <Form.Label>Descrição da Carga</Form.Label>
               <Form.Control
@@ -347,12 +433,31 @@ export default function ViagensTable() {
         <Modal.Footer>
           <Button variant="secondary" onClick={() => {
             setShowModal(false)
-            setError('')
+            setEditingViagem(null)
+            setFormData({ status: 'programada' })
           }}>
             Cancelar
           </Button>
           <Button variant="primary" onClick={handleSubmit} disabled={formLoading}>
-            {formLoading ? <Spinner size="sm" /> : 'Salvar Viagem'}
+            {formLoading ? <Spinner size="sm" /> : (editingViagem ? 'Atualizar' : 'Salvar')}
+          </Button>
+        </Modal.Footer>
+      </Modal>
+
+      {/* Modal de confirmação de exclusão */}
+      <Modal show={showDeleteModal} onHide={() => setShowDeleteModal(false)}>
+        <Modal.Header closeButton>
+          <Modal.Title>Confirmar Exclusão</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          Tem certeza que deseja excluir esta viagem? Esta ação não pode ser desfeita.
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="secondary" onClick={() => setShowDeleteModal(false)}>
+            Cancelar
+          </Button>
+          <Button variant="danger" onClick={handleDelete} disabled={formLoading}>
+            {formLoading ? <Spinner size="sm" /> : 'Excluir'}
           </Button>
         </Modal.Footer>
       </Modal>
