@@ -3,25 +3,41 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useSessionContext } from '@supabase/auth-helpers-react'
+import dynamic from 'next/dynamic'
+import { Alert, CircularProgress } from '@mui/material'
+import { Row, Col, Card, Container } from 'react-bootstrap'
 
 import Sidebar from './components/Sidebar'
 import MotoristasTable from './components/MotoristasTable'
 import CaminhoesTable from './components/CaminhoesTable'
 import ViagensTable from './components/ViagensTable'
 
+const PieChart = dynamic(() => import('@mui/x-charts').then(mod => mod.PieChart), { ssr: false })
+const BarChart = dynamic(() => import('@mui/x-charts').then(mod => mod.BarChart), { ssr: false })
+
+type Estatisticas = {
+  em_rota: number
+  disponiveis: number
+  em_manutencao: number
+  atrasos: number
+  status_viagens: { status: string; quantidade: number }[]
+  motoristas_ativos: number
+  motoristas_inativos: number
+  tipos_caminhoes: { tipo: string; quantidade: number }[]
+}
+
 export default function DashboardPage() {
   const router = useRouter()
   const { session, isLoading } = useSessionContext()
 
-  const [estatisticas, setEstatisticas] = useState<any>(null)
+  const [estatisticas, setEstatisticas] = useState<Estatisticas | null>(null)
   const [view, setView] = useState('dashboard')
   const [loadingStats, setLoadingStats] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    if (!isLoading && !session) {
-      router.push('/login')
-    }
-  }, [session, isLoading])
+    if (!isLoading && !session) router.push('/login')
+  }, [session, isLoading, router])
 
   useEffect(() => {
     if (session) {
@@ -29,116 +45,113 @@ export default function DashboardPage() {
         try {
           setLoadingStats(true)
           const response = await fetch('/api/estatisticas')
-          if (!response.ok) {
-            throw new Error('Erro ao buscar as estatísticas')
-          }
+          if (!response.ok) throw new Error('Erro ao buscar estatísticas')
           const stats = await response.json()
           setEstatisticas(stats)
-        } catch (error) {
-          console.error(error)
+        } catch (err) {
+          console.error(err)
+          setError('Erro ao carregar dados do dashboard.')
         } finally {
           setLoadingStats(false)
         }
       }
-
       fetchStats()
     }
   }, [session])
 
-  if (isLoading) return <p>Carregando...</p>
-  if (!session) return null
+  const renderCards = () => {
+    if (!estatisticas) return null
 
-  // Função para determinar a cor do card baseado no valor
-  const getCardColor = (value: number, reverse = false) => {
-    if (reverse) {
-      if (value === 0) return 'bg-success text-white'
-      if (value < 3) return 'bg-success text-white'
-      if (value < 5) return 'bg-warning text-dark'
-      return 'bg-danger text-white'
-    } else {
-      if (value === 0) return 'bg-light text-dark'
-      if (value < 3) return 'bg-success text-white'
-      if (value < 5) return 'bg-warning text-dark'
-      return 'bg-danger text-white'
+    const cards = [
+      { title: 'Caminhões em Rota', value: estatisticas.em_rota, color: '#0d6efd' },
+      { title: 'Caminhões Disponíveis', value: estatisticas.disponiveis, color: '#198754' },
+      { title: 'Em Manutenção', value: estatisticas.em_manutencao, color: '#ffc107' },
+      { title: 'Viagens Atrasadas', value: estatisticas.atrasos, color: '#dc3545' },
+      { title: 'Motoristas Ativos', value: estatisticas.motoristas_ativos, color: '#20c997' },
+      { title: 'Motoristas Inativos', value: estatisticas.motoristas_inativos, color: '#6c757d' }
+    ]
+
+    return (
+      <Row className="mb-4">
+        {cards.map((card, idx) => (
+          <Col key={idx} md={4} lg={3} className="mb-3">
+            <Card style={{ backgroundColor: card.color, color: '#fff' }}>
+              <Card.Body>
+                <Card.Title>{card.title}</Card.Title>
+                <Card.Text style={{ fontSize: '1.5rem', fontWeight: 'bold' }}>
+                  {card.value}
+                </Card.Text>
+              </Card.Body>
+            </Card>
+          </Col>
+        ))}
+      </Row>
+    )
+  }
+
+  const renderContent = () => {
+    if (loadingStats) {
+      return <div className="text-center mt-5"><CircularProgress /></div>
+    }
+
+    if (error) {
+      return <Alert severity="error">{error}</Alert>
+    }
+
+    switch (view) {
+      case 'dashboard':
+        return (
+          <>
+            {renderCards()}
+            <Row>
+              <Col md={6}>
+                <h5>Status das Viagens</h5>
+                <BarChart
+                  xAxis={[{ scaleType: 'band', data: estatisticas!.status_viagens.map(s => s.status) }]}
+                  series={[{ data: estatisticas!.status_viagens.map(s => s.quantidade) }]}
+                  width={500}
+                  height={300}
+                />
+              </Col>
+              <Col md={6}>
+                <h5>Tipos de Caminhões</h5>
+                <PieChart
+                  series={[
+                    {
+                      data: estatisticas!.tipos_caminhoes.map(tipo => ({
+                        id: tipo.tipo,
+                        value: tipo.quantidade,
+                        label: tipo.tipo
+                      }))
+                    }
+                  ]}
+                  width={500}
+                  height={300}
+                />
+              </Col>
+            </Row>
+          </>
+        )
+      case 'caminhoes':
+        return <CaminhoesTable />
+      case 'motoristas':
+        return <MotoristasTable />
+      case 'viagens':
+        return <ViagensTable />
+      case 'estatisticas':
+        return renderCards()
+      default:
+        return null
     }
   }
 
   return (
-    <div style={{ display: 'flex', backgroundColor: '#f4f4f4', minHeight: '100vh' }}>
-      <Sidebar onSelect={setView} />
-
-      <div
-        style={{
-          marginLeft: '250px',
-          padding: '2rem',
-          width: '100%',
-          backgroundColor: '#e0e0e0',
-          borderRadius: '8px',
-          boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)',
-        }}
-      >
-        <h2 style={{ color: '#333' }}>Bem-vindo, {session.user.email}</h2>
-
-        {view === 'dashboard' && (
-          <>
-            {loadingStats ? (
-              <div className="d-flex justify-content-center align-items-center py-5">
-                <div className="spinner-border text-primary" role="status">
-                  <span className="visually-hidden">Carregando...</span>
-                </div>
-              </div>
-            ) : estatisticas ? (
-              <div className="row g-4">
-                {/* Card de Caminhões em Rota */}
-                <div className="col-md-6 col-lg-3">
-                  <div className={`card h-100 border-0 shadow-sm ${getCardColor(estatisticas.em_rota)}`}>
-                    <div className="card-body">
-                      <h5 className="card-title">Caminhões em Rota</h5>
-                      <p className="card-text display-5 fw-bold">{estatisticas.em_rota}</p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Card de Caminhões Disponíveis */}
-                <div className="col-md-6 col-lg-3">
-                  <div className={`card h-100 border-0 shadow-sm ${getCardColor(estatisticas.disponiveis, true)}`}>
-                    <div className="card-body">
-                      <h5 className="card-title">Disponíveis</h5>
-                      <p className="card-text display-5 fw-bold">{estatisticas.disponiveis}</p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Card de Caminhões em Manutenção */}
-                <div className="col-md-6 col-lg-3">
-                  <div className={`card h-100 border-0 shadow-sm ${getCardColor(estatisticas.em_manutencao)}`}>
-                    <div className="card-body">
-                      <h5 className="card-title">Em Manutenção</h5>
-                      <p className="card-text display-5 fw-bold">{estatisticas.em_manutencao}</p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Card de Atrasos */}
-                <div className="col-md-6 col-lg-3">
-                  <div className={`card h-100 border-0 shadow-sm ${getCardColor(estatisticas.atrasos)}`}>
-                    <div className="card-body">
-                      <h5 className="card-title">Viagens Atrasadas</h5>
-                      <p className="card-text display-5 fw-bold">{estatisticas.atrasos}</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <p className="text-center py-5">Não foi possível carregar as estatísticas</p>
-            )}
-          </>
-        )}
-
-        {/* Exibe as tabelas conforme a seleção de visualização */}
-        {view === 'motoristas' && <MotoristasTable />}
-        {view === 'caminhoes' && <CaminhoesTable />}
-        {view === 'viagens' && <ViagensTable />}
+    <div style={{ display: 'flex' }}>
+      <Sidebar onNavigate={setView} activeView={view} />
+      <div style={{ marginLeft: '250px', padding: '2rem', width: '100%' }}>
+        <Container fluid>
+          {renderContent()}
+        </Container>
       </div>
     </div>
   )
