@@ -14,18 +14,17 @@ export async function GET() {
   try {
     const supabase = createServerSupabaseClient()
 
-    // 1. Busca estatísticas gerais do banco via função RPC (assumindo que você criou no Supabase)
+  
     const { data: stats, error: statsError } = await supabase.rpc('get_estatisticas_frota')
     if (statsError) throw statsError
 
-    // 2. Busca viagens para gerar os dados dos gráficos
     const { data: viagens, error: viagensError } = await supabase
       .from('viagens')
       .select('status, data_chegada_estimada')
 
     if (viagensError) throw viagensError
 
-    // 3. Processa os dados de viagens por status
+ 
     const viagensPorStatus = (viagens as ViagemStatus[]).reduce<Record<string, number>>(
       (acc, viagem) => {
         const status = viagem.status
@@ -46,7 +45,7 @@ export async function GET() {
       })),
       motoristas_ativos: stats.motoristas_ativos ?? 0,
       motoristas_inativos: stats.motoristas_inativos ?? 0,
-      tipos_caminhoes: stats.tipos_caminhoes ?? [], // array [{ tipo: string, quantidade: number }]
+      tipos_caminhoes: stats.tipos_caminhoes ?? [],
     })
 
   } catch (error: any) {
